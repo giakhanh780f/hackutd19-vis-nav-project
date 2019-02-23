@@ -6,3 +6,6 @@ https://console.cloud.google.com/apis/library/vision.googleapis.com?project=whit
 https://community.microfocus.com/microfocus/mainframe_solutions/rumba/w/knowledge_base/25538/rumba-client-api-file-names
 https://cloud.google.com/vision/
 https://cloud.google.com/vision/docs/detecting-objects
+https://cloud.google.com/vision/docs/detecting-landmarks
+https://github.com/GoogleCloudPlatform/dotnet-docs-samples/blob/master/vision/api/Detect/Program.cs
+https://github.com/GoogleCloudPlatform/dotnet-docs-samples/blob/master/vision/api/Detect/Program.cs
