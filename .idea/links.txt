@@ -1,0 +1,8 @@
+Useful links:
+https://www.allaboutcircuits.com/projects/communicate-with-your-arduino-through-android/
+https://developers.google.com/apis-explorer/?hl=en_US#p/vision/v1/
+https://console.cloud.google.com/getting-started
+https://console.cloud.google.com/apis/library/vision.googleapis.com?project=white-option-229911&folder&organizationId
+https://community.microfocus.com/microfocus/mainframe_solutions/rumba/w/knowledge_base/25538/rumba-client-api-file-names
+https://cloud.google.com/vision/
+https://cloud.google.com/vision/docs/detecting-objects
