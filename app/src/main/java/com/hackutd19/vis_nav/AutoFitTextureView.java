@@ -72,4 +72,9 @@ public class AutoFitTextureView extends TextureView {
         }
     }
 
+    @Override
+    protected void drawableStateChanged() {
+        super.drawableStateChanged();
+        System.out.println("Ping!");
+    }
 }

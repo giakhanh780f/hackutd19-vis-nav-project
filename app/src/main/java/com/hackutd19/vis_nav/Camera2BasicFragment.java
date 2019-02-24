@@ -72,7 +72,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 public class Camera2BasicFragment extends Fragment
-        implements View.OnClickListener, ActivityCompat.OnRequestPermissionsResultCallback {
+        implements /*View.OnClickListener,*/ ActivityCompat.OnRequestPermissionsResultCallback {
 
     /**
      * Conversion from screen rotation to JPEG orientation.
@@ -234,19 +234,7 @@ public class Camera2BasicFragment extends Fragment
      */
     private File mFile;
 
-    /**
-     * This a callback object for the {@link ImageReader}. "onImageAvailable" will be called when a
-     * still image is ready to be saved.
-     */
-    private final ImageReader.OnImageAvailableListener mOnImageAvailableListener
-            = new ImageReader.OnImageAvailableListener() {
 
-        @Override
-        public void onImageAvailable(ImageReader reader) {
-            mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage(), mFile));
-        }
-
-    };
 
     /**
      * {@link CaptureRequest.Builder} for the camera preview
@@ -289,7 +277,7 @@ public class Camera2BasicFragment extends Fragment
         private void process(CaptureResult result) {
             switch (mState) {
                 case STATE_PREVIEW: {
-                    // We have nothing to do when the camera preview is working normally.
+                    // We have nothing to do when the camera preview is working normally
                     break;
                 }
                 case STATE_WAITING_LOCK: {
@@ -426,8 +414,8 @@ public class Camera2BasicFragment extends Fragment
 
     @Override
     public void onViewCreated(final View view, Bundle savedInstanceState) {
-        view.findViewById(R.id.picture).setOnClickListener(this);
-        view.findViewById(R.id.info).setOnClickListener(this);
+        //view.findViewById(R.id.picture).setOnClickListener(this);
+        //view.findViewById(R.id.info).setOnClickListener(this);
         mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
     }
 
@@ -683,12 +671,16 @@ public class Camera2BasicFragment extends Fragment
             texture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
 
             // This is the output Surface we need to start preview.
+            //Surface surface = new Surface(texture);
             Surface surface = new Surface(texture);
+            Surface mImageSurface = mImageReader.getSurface();
+
 
             // We set up a CaptureRequest.Builder with the output Surface.
             mPreviewRequestBuilder
                     = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             mPreviewRequestBuilder.addTarget(surface);
+            mPreviewRequestBuilder.addTarget(mImageSurface);
 
             // Here, we create a CameraCaptureSession for camera preview.
             mCameraDevice.createCaptureSession(Arrays.asList(surface, mImageReader.getSurface()),
@@ -714,6 +706,7 @@ public class Camera2BasicFragment extends Fragment
                                 mPreviewRequest = mPreviewRequestBuilder.build();
                                 mCaptureSession.setRepeatingRequest(mPreviewRequest,
                                         mCaptureCallback, mBackgroundHandler);
+
                             } catch (CameraAccessException e) {
                                 e.printStackTrace();
                             }
@@ -886,6 +879,7 @@ public class Camera2BasicFragment extends Fragment
         }
     }
 
+    /*
     @Override
     public void onClick(View view) {
         switch (view.getId()) {
@@ -905,6 +899,7 @@ public class Camera2BasicFragment extends Fragment
             }
         }
     }
+    */
 
     private void setAutoFlash(CaptureRequest.Builder requestBuilder) {
         if (mFlashSupported) {
@@ -912,6 +907,26 @@ public class Camera2BasicFragment extends Fragment
                     CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
         }
     }
+
+    /**
+     * This a callback object for the {@link ImageReader}. "onImageAvailable" will be called when a
+     * still image is ready to be saved.
+     */
+    private static int imagesHeld= 0;
+    private final ImageReader.OnImageAvailableListener mOnImageAvailableListener
+            = new ImageReader.OnImageAvailableListener() {
+
+        @Override
+        public void onImageAvailable(ImageReader reader) {
+            if(imagesHeld < reader.getMaxImages()) {
+                Image img = reader.acquireNextImage();
+                imagesHeld++;
+                mBackgroundHandler.post(new ImageSaver(img, mFile));
+            }
+
+        }
+
+    };
 
     /**
      * Saves a JPEG {@link Image} into the specified {@link File}.
@@ -937,8 +952,13 @@ public class Camera2BasicFragment extends Fragment
             ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
             byte[] bytes = new byte[buffer.remaining()];
             buffer.get(bytes);
-            FileOutputStream output = null;
-            try {
+
+            //TODO: Add Firebase ML statements here
+
+            mImage.close();
+            imagesHeld--;
+            //FileOutputStream output = null;
+            /*try {
                 output = new FileOutputStream(mFile);
                 output.write(bytes);
             } catch (IOException e) {
@@ -952,10 +972,13 @@ public class Camera2BasicFragment extends Fragment
                         e.printStackTrace();
                     }
                 }
-            }
+            }*/
         }
 
     }
+
+    //TODO: Add Firebase ML function here
+
 
     /**
      * Compares two {@code Size}s based on their areas.
