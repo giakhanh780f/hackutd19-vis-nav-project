@@ -59,6 +59,14 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
 
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.firebase.ml.vision.FirebaseVision;
+import com.google.firebase.ml.vision.common.FirebaseVisionImage;
+import com.google.firebase.ml.vision.common.FirebaseVisionImageMetadata;
+import com.google.firebase.ml.vision.label.FirebaseVisionImageLabel;
+import com.google.firebase.ml.vision.label.FirebaseVisionImageLabeler;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -70,6 +78,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+
+import static android.content.Context.CAMERA_SERVICE;
 
 public class Camera2BasicFragment extends Fragment
         implements /*View.OnClickListener,*/ ActivityCompat.OnRequestPermissionsResultCallback {
@@ -478,11 +488,12 @@ public class Camera2BasicFragment extends Fragment
     @SuppressWarnings("SuspiciousNameCombination")
     private void setUpCameraOutputs(int width, int height) {
         Activity activity = getActivity();
-        CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
+        CameraManager manager = (CameraManager) activity.getSystemService(CAMERA_SERVICE);
         try {
             for (String cameraId : manager.getCameraIdList()) {
                 CameraCharacteristics characteristics
                         = manager.getCameraCharacteristics(cameraId);
+                currentCameraID = cameraId;
 
                 // We don't use a front facing camera in this sample.
                 Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
@@ -501,7 +512,7 @@ public class Camera2BasicFragment extends Fragment
                         Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),
                         new CompareSizesByArea());
                 mImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(),
-                        ImageFormat.JPEG, /*maxImages*/2);
+                        ImageFormat.YUV_420_888, /*maxImages*/2);
                 mImageReader.setOnImageAvailableListener(
                         mOnImageAvailableListener, mBackgroundHandler);
 
@@ -598,7 +609,7 @@ public class Camera2BasicFragment extends Fragment
         setUpCameraOutputs(width, height);
         configureTransform(width, height);
         Activity activity = getActivity();
-        CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
+        CameraManager manager = (CameraManager) activity.getSystemService(CAMERA_SERVICE);
         try {
             if (!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
                 throw new RuntimeException("Time out waiting to lock camera opening.");
@@ -913,6 +924,7 @@ public class Camera2BasicFragment extends Fragment
      * still image is ready to be saved.
      */
     private static int imagesHeld= 0;
+    private static String currentCameraID;
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener
             = new ImageReader.OnImageAvailableListener() {
 
@@ -921,7 +933,11 @@ public class Camera2BasicFragment extends Fragment
             if(imagesHeld < reader.getMaxImages()) {
                 Image img = reader.acquireNextImage();
                 imagesHeld++;
-                mBackgroundHandler.post(new ImageSaver(img, mFile));
+                try {
+                    mBackgroundHandler.post(new ImageSaver(img, mFile, getRotationCompensation(mCameraId)));
+                } catch (CameraAccessException e) {
+                    e.printStackTrace();
+                }
             }
 
         }
@@ -942,9 +958,12 @@ public class Camera2BasicFragment extends Fragment
          */
         private final File mFile;
 
-        ImageSaver(Image image, File file) {
+        private final int rotation;
+
+        ImageSaver(Image image, File file, int rotation) {
             mImage = image;
             mFile = file;
+            this.rotation = rotation;
         }
 
         @Override
@@ -953,7 +972,36 @@ public class Camera2BasicFragment extends Fragment
             byte[] bytes = new byte[buffer.remaining()];
             buffer.get(bytes);
 
+
             //TODO: Add Firebase ML statements here
+            FirebaseVisionImageMetadata metadata = new FirebaseVisionImageMetadata.Builder()
+                    .setWidth(480)   // 480x360 is typically sufficient for
+                    .setHeight(360)  // image recognition
+                    .setFormat(FirebaseVisionImageMetadata.IMAGE_FORMAT_NV21)
+                    .setRotation(rotation)
+                    .build();
+            FirebaseVisionImage image = FirebaseVisionImage.fromByteBuffer(buffer, metadata);
+            FirebaseVisionImageLabeler labeler = FirebaseVision.getInstance().getOnDeviceImageLabeler();
+            labeler.processImage(image)
+                    .addOnSuccessListener(new OnSuccessListener<List<FirebaseVisionImageLabel>>() {
+                        @Override
+                        public void onSuccess(List<FirebaseVisionImageLabel> labels) {
+                            for (FirebaseVisionImageLabel label: labels) {
+                                String text = label.getText();
+                                String entityId = label.getEntityId();
+                                float confidence = label.getConfidence();
+                                System.out.println(text + " "  + entityId + " " + confidence);
+                            }
+                        }
+                    })
+                    .addOnFailureListener(new OnFailureListener() {
+                        @Override
+                        public void onFailure(@NonNull Exception e) {
+                            // Task failed with an exception
+                            // ...
+                        }
+                    });
+
 
             mImage.close();
             imagesHeld--;
@@ -978,7 +1026,44 @@ public class Camera2BasicFragment extends Fragment
     }
 
     //TODO: Add Firebase ML function here
+    private int getRotationCompensation(String cameraId/*, Activity activity, Context context*/)
+            throws CameraAccessException {
+        // Get the device's current rotation relative to its "native" orientation.
+        // Then, from the ORIENTATIONS table, look up the angle the image must be
+        // rotated to compensate for the device's rotation.
+        int deviceRotation = this.getActivity().getWindowManager().getDefaultDisplay().getRotation();
+        int rotationCompensation = ORIENTATIONS.get(deviceRotation);
 
+        // On most devices, the sensor orientation is 90 degrees, but for some
+        // devices it is 270 degrees. For devices with a sensor orientation of
+        // 270, rotate the image an additional 180 ((270 + 270) % 360) degrees.
+        CameraManager cameraManager = (CameraManager) this.getContext().getSystemService(CAMERA_SERVICE);
+        int sensorOrientation = cameraManager
+                .getCameraCharacteristics(cameraId)
+                .get(CameraCharacteristics.SENSOR_ORIENTATION);
+        rotationCompensation = (rotationCompensation + sensorOrientation + 270) % 360;
+
+        // Return the corresponding FirebaseVisionImageMetadata rotation value.
+        int result;
+        switch (rotationCompensation) {
+            case 0:
+                result = FirebaseVisionImageMetadata.ROTATION_0;
+                break;
+            case 90:
+                result = FirebaseVisionImageMetadata.ROTATION_90;
+                break;
+            case 180:
+                result = FirebaseVisionImageMetadata.ROTATION_180;
+                break;
+            case 270:
+                result = FirebaseVisionImageMetadata.ROTATION_270;
+                break;
+            default:
+                result = FirebaseVisionImageMetadata.ROTATION_0;
+                Log.e(TAG, "Bad rotation value: " + rotationCompensation);
+        }
+        return result;
+    }
 
     /**
      * Compares two {@code Size}s based on their areas.
