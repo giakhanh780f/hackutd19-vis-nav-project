@@ -1,1 +1,1 @@
-# Visual Audio Navigator
+# Echo Canvas
