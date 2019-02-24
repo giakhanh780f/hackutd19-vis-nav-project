@@ -1,10 +1,12 @@
 package com.hackutd19.vis_nav;
 
+import android.content.Intent;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraManager;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.view.View;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -27,5 +29,8 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-
+    public void cameraLaunch(View view) {
+        Intent fieldIntent = new Intent(this, CameraActivity.class);
+        startActivity(fieldIntent);
+    }
 }
