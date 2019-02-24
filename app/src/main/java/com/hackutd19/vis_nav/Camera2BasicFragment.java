@@ -71,8 +71,6 @@ import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-import com.hackutd19.vis_nav.AutoFitTextureView;
-
 public class Camera2BasicFragment extends Fragment
         implements View.OnClickListener, ActivityCompat.OnRequestPermissionsResultCallback {
 
@@ -436,7 +434,7 @@ public class Camera2BasicFragment extends Fragment
     @Override
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
-        mFile = new File(getActivity().getExternalFilesDir(null), "pic.jpg");
+        mFile = new File(getActivity().getFilesDir(), System.currentTimeMillis() + "pic.jpg");
     }
 
     @Override
@@ -571,6 +569,8 @@ public class Camera2BasicFragment extends Fragment
                         rotatedPreviewWidth, rotatedPreviewHeight, maxPreviewWidth,
                         maxPreviewHeight, largest);
 
+                System.out.println("Max Size: " + MAX_PREVIEW_WIDTH + "px by " + MAX_PREVIEW_HEIGHT);
+                System.out.println("Preview Size: " + mPreviewSize.getWidth() + "px by " + mPreviewSize.getHeight());
                 // We fit the aspect ratio of TextureView to the size of preview we picked.
                 int orientation = getResources().getConfiguration().orientation;
                 if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
