@@ -41,11 +41,11 @@ import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
-import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.DialogFragment;
 import android.support.v4.app.Fragment;
@@ -54,37 +54,35 @@ import android.util.Log;
 import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.LayoutInflater;
-import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.TextView;
+import android.view.WindowManager;
 import android.widget.Toast;
 
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.firebase.ml.vision.FirebaseVision;
 import com.google.firebase.ml.vision.common.FirebaseVisionImage;
+import com.google.firebase.ml.vision.common.FirebaseVisionImageMetadata;
 import com.google.firebase.ml.vision.label.FirebaseVisionImageLabel;
 import com.google.firebase.ml.vision.label.FirebaseVisionImageLabeler;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-public class Camera2BasicFragment extends Fragment
-        implements View.OnClickListener, ActivityCompat.OnRequestPermissionsResultCallback {
+import static android.content.Context.CAMERA_SERVICE;
+
+public class Camera2BasicFragment2 extends Fragment
+        implements /*View.OnClickListener,*/ ActivityCompat.OnRequestPermissionsResultCallback {
 
     /**
      * Conversion from screen rotation to JPEG orientation.
@@ -189,7 +187,7 @@ public class Camera2BasicFragment extends Fragment
     private CameraDevice mCameraDevice;
 
     /**
-     * The {@link android.util.Size} of camera preview.
+     * The {@link Size} of camera preview.
      */
     private Size mPreviewSize;
 
@@ -246,19 +244,7 @@ public class Camera2BasicFragment extends Fragment
      */
     private File mFile;
 
-    /**
-     * This a callback object for the {@link ImageReader}. "onImageAvailable" will be called when a
-     * still image is ready to be saved.
-     */
-    private final ImageReader.OnImageAvailableListener mOnImageAvailableListener
-            = new ImageReader.OnImageAvailableListener() {
 
-        @Override
-        public void onImageAvailable(ImageReader reader) {
-            mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage(), mFile));
-        }
-
-    };
 
     /**
      * {@link CaptureRequest.Builder} for the camera preview
@@ -293,9 +279,6 @@ public class Camera2BasicFragment extends Fragment
     private int mSensorOrientation;
 
     private Context context;
-    private static boolean newImageToProcess = false;
-    private static File fileToProcess = null;
-    private String displayText = "";
     /**
      * A {@link CameraCaptureSession.CaptureCallback} that handles events related to JPEG capture.
      */
@@ -305,7 +288,7 @@ public class Camera2BasicFragment extends Fragment
         private void process(CaptureResult result) {
             switch (mState) {
                 case STATE_PREVIEW: {
-                    // We have nothing to do when the camera preview is working normally.
+                    // We have nothing to do when the camera preview is working normally
                     break;
                 }
                 case STATE_WAITING_LOCK: {
@@ -430,8 +413,8 @@ public class Camera2BasicFragment extends Fragment
         }
     }
 
-    public static Camera2BasicFragment newInstance() {
-        return new Camera2BasicFragment();
+    public static Camera2BasicFragment2 newInstance() {
+        return new Camera2BasicFragment2();
     }
 
     @Override
@@ -440,31 +423,23 @@ public class Camera2BasicFragment extends Fragment
         return inflater.inflate(R.layout.fragment_camera2_basic, container, false);
     }
 
-
-    private Handler handler = new Handler();
-
     @Override
     public void onViewCreated(final View view, Bundle savedInstanceState) {
-        view.findViewById(R.id.picture).setOnClickListener(this);
-        view.findViewById(R.id.info).setOnClickListener(this);
+        //view.findViewById(R.id.picture).setOnClickListener(this);
+        //view.findViewById(R.id.info).setOnClickListener(this);
         mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
-
     }
-
-    private Runnable runnable = new Runnable() {
-        @Override
-        public void run() {
-            /* do what you need to do */
-            takePicture();
-            /* and here comes the "trick" */
-            handler.postDelayed(this, 7000);
-        }
-    };
 
     @Override
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
-        mFile = new File(getActivity().getExternalFilesDir(null), "pic.jpg");
+        mFile = new File(getActivity().getFilesDir(), System.currentTimeMillis() + "pic.jpg");
+    }
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        context = this.getContext();
     }
 
     @Override
@@ -472,7 +447,6 @@ public class Camera2BasicFragment extends Fragment
         super.onResume();
         startBackgroundThread();
 
-        handler.postDelayed(runnable, 100);
         // When the screen is turned off and turned back on, the SurfaceTexture is already
         // available, and "onSurfaceTextureAvailable" will not be called. In that case, we can open
         // a camera and start preview from here (otherwise, we wait until the surface is ready in
@@ -488,7 +462,6 @@ public class Camera2BasicFragment extends Fragment
     public void onPause() {
         closeCamera();
         stopBackgroundThread();
-        handler.removeCallbacks(runnable);
         super.onPause();
     }
 
@@ -522,11 +495,12 @@ public class Camera2BasicFragment extends Fragment
     @SuppressWarnings("SuspiciousNameCombination")
     private void setUpCameraOutputs(int width, int height) {
         Activity activity = getActivity();
-        CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
+        CameraManager manager = (CameraManager) activity.getSystemService(CAMERA_SERVICE);
         try {
             for (String cameraId : manager.getCameraIdList()) {
                 CameraCharacteristics characteristics
                         = manager.getCameraCharacteristics(cameraId);
+                currentCameraID = cameraId;
 
                 // We don't use a front facing camera in this sample.
                 Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
@@ -545,7 +519,7 @@ public class Camera2BasicFragment extends Fragment
                         Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),
                         new CompareSizesByArea());
                 mImageReader = ImageReader.newInstance(largest.getWidth(), largest.getHeight(),
-                        ImageFormat.JPEG, /*maxImages*/2);
+                        ImageFormat.YUV_420_888, /*maxImages*/2);
                 mImageReader.setOnImageAvailableListener(
                         mOnImageAvailableListener, mBackgroundHandler);
 
@@ -631,10 +605,9 @@ public class Camera2BasicFragment extends Fragment
     }
 
     /**
-     * Opens the camera specified by {@link Camera2BasicFragment#mCameraId}.
+     * Opens the camera specified by {@link Camera2BasicFragment2#mCameraId}.
      */
     private void openCamera(int width, int height) {
-        context = this.getContext();
         if (ContextCompat.checkSelfPermission(getActivity(), Manifest.permission.CAMERA)
                 != PackageManager.PERMISSION_GRANTED) {
             requestCameraPermission();
@@ -643,7 +616,7 @@ public class Camera2BasicFragment extends Fragment
         setUpCameraOutputs(width, height);
         configureTransform(width, height);
         Activity activity = getActivity();
-        CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
+        CameraManager manager = (CameraManager) activity.getSystemService(CAMERA_SERVICE);
         try {
             if (!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
                 throw new RuntimeException("Time out waiting to lock camera opening.");
@@ -716,12 +689,16 @@ public class Camera2BasicFragment extends Fragment
             texture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
 
             // This is the output Surface we need to start preview.
+            //Surface surface = new Surface(texture);
             Surface surface = new Surface(texture);
+            Surface mImageSurface = mImageReader.getSurface();
+
 
             // We set up a CaptureRequest.Builder with the output Surface.
             mPreviewRequestBuilder
                     = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             mPreviewRequestBuilder.addTarget(surface);
+            mPreviewRequestBuilder.addTarget(mImageSurface);
 
             // Here, we create a CameraCaptureSession for camera preview.
             mCameraDevice.createCaptureSession(Arrays.asList(surface, mImageReader.getSurface()),
@@ -747,6 +724,7 @@ public class Camera2BasicFragment extends Fragment
                                 mPreviewRequest = mPreviewRequestBuilder.build();
                                 mCaptureSession.setRepeatingRequest(mPreviewRequest,
                                         mCaptureCallback, mBackgroundHandler);
+
                             } catch (CameraAccessException e) {
                                 e.printStackTrace();
                             }
@@ -765,7 +743,7 @@ public class Camera2BasicFragment extends Fragment
     }
 
     /**
-     * Configures the necessary {@link android.graphics.Matrix} transformation to `mTextureView`.
+     * Configures the necessary {@link Matrix} transformation to `mTextureView`.
      * This method should be called after the camera preview size is determined in
      * setUpCameraOutputs and also the size of `mTextureView` is fixed.
      *
@@ -870,11 +848,8 @@ public class Camera2BasicFragment extends Fragment
                 public void onCaptureCompleted(@NonNull CameraCaptureSession session,
                                                @NonNull CaptureRequest request,
                                                @NonNull TotalCaptureResult result) {
-                    //showToast("Saved: " + mFile);
-                    //Log.d(TAG, mFile.toString());
-                    if(newImageToProcess) {
-                        processImage();
-                    }
+                    showToast("Saved: " + mFile);
+                    Log.d(TAG, mFile.toString());
                     unlockFocus();
                 }
             };
@@ -922,25 +897,27 @@ public class Camera2BasicFragment extends Fragment
         }
     }
 
+    /*
     @Override
     public void onClick(View view) {
         switch (view.getId()) {
             case R.id.picture: {
-                //takePicture();
+                takePicture();
                 break;
             }
             case R.id.info: {
-                /*Activity activity = getActivity();
+                Activity activity = getActivity();
                 if (null != activity) {
                     new AlertDialog.Builder(activity)
                             .setMessage("Test only")
                             .setPositiveButton(android.R.string.ok, null)
                             .show();
-                }*/
+                }
                 break;
             }
         }
     }
+    */
 
     private void setAutoFlash(CaptureRequest.Builder requestBuilder) {
         if (mFlashSupported) {
@@ -948,6 +925,31 @@ public class Camera2BasicFragment extends Fragment
                     CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
         }
     }
+
+    /**
+     * This a callback object for the {@link ImageReader}. "onImageAvailable" will be called when a
+     * still image is ready to be saved.
+     */
+    private static int imagesHeld= 0;
+    private static String currentCameraID;
+    private final ImageReader.OnImageAvailableListener mOnImageAvailableListener
+            = new ImageReader.OnImageAvailableListener() {
+
+        @Override
+        public void onImageAvailable(ImageReader reader) {
+            if(imagesHeld < reader.getMaxImages()) {
+                Image img = reader.acquireNextImage();
+                imagesHeld++;
+                try {
+                    mBackgroundHandler.post(new ImageSaver(img, mFile, getRotationCompensation(mCameraId)));
+                } catch (CameraAccessException e) {
+                    e.printStackTrace();
+                }
+            }
+
+        }
+
+    };
 
     /**
      * Saves a JPEG {@link Image} into the specified {@link File}.
@@ -963,9 +965,12 @@ public class Camera2BasicFragment extends Fragment
          */
         private final File mFile;
 
-        ImageSaver(Image image, File file) {
+        private final int rotation;
+
+        ImageSaver(Image image, File file, int rotation) {
             mImage = image;
             mFile = file;
+            this.rotation = rotation;
         }
 
         @Override
@@ -973,7 +978,36 @@ public class Camera2BasicFragment extends Fragment
             ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
             byte[] bytes = new byte[buffer.remaining()];
             buffer.get(bytes);
-            FileOutputStream output = null;
+
+            FirebaseVisionImageMetadata metadata = new FirebaseVisionImageMetadata.Builder()
+                    .setWidth(480)   // 480x360 is typically sufficient for
+                    .setHeight(360)  // image recognition
+                    .setFormat(FirebaseVisionImageMetadata.IMAGE_FORMAT_NV21)
+                    .setRotation(rotation)
+                    .build();
+            FirebaseVisionImage image = FirebaseVisionImage.fromByteBuffer(buffer, metadata);
+            FirebaseVisionImageLabeler labeler = FirebaseVision.getInstance().getOnDeviceImageLabeler();
+            labeler.processImage(image)
+                    .addOnSuccessListener(new OnSuccessListener<List<FirebaseVisionImageLabel>>() {
+                        @Override
+                        public void onSuccess(List<FirebaseVisionImageLabel> labels) {
+                            for (FirebaseVisionImageLabel label: labels) {
+                                String text = label.getText();
+                                String entityId = label.getEntityId();
+                                float confidence = label.getConfidence();
+                                System.out.println(text + " "  + entityId + " " + confidence);
+                            }
+                        }
+                    })
+                    .addOnFailureListener(new OnFailureListener() {
+                        @Override
+                        public void onFailure(@NonNull Exception e) {
+                            // Task failed with an exception
+                            // ...
+                        }
+                    });
+
+            /*FileOutputStream output = null;
             try {
                 output = new FileOutputStream(mFile);
                 output.write(bytes);
@@ -983,49 +1017,59 @@ public class Camera2BasicFragment extends Fragment
                 mImage.close();
                 if (null != output) {
                     try {
-                        newImageToProcess = true;
-                        fileToProcess = mFile;
                         output.close();
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
                 }
-            }
+            }*/
+            mImage.close();
+            imagesHeld--;
 
         }
 
     }
 
-    public void processImage() {
-        FirebaseVisionImage image = null;
-        try {
-            image = FirebaseVisionImage.fromFilePath(context, Uri.fromFile(fileToProcess));
-        } catch (IOException e) {
-            e.printStackTrace();
+    //TODO: Add Firebase ML function here
+    private int getRotationCompensation(String cameraId/*, Activity activity, Context context*/)
+            throws CameraAccessException {
+        // Get the device's current rotation relative to its "native" orientation.
+        // Then, from the ORIENTATIONS table, look up the angle the image must be
+        // rotated to compensate for the device's rotation.
+
+        WindowManager manager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+        int deviceRotation = manager.getDefaultDisplay().getRotation();
+        int rotationCompensation = ORIENTATIONS.get(deviceRotation);
+
+        // On most devices, the sensor orientation is 90 degrees, but for some
+        // devices it is 270 degrees. For devices with a sensor orientation of
+        // 270, rotate the image an additional 180 ((270 + 270) % 360) degrees.
+        CameraManager cameraManager = (CameraManager) context.getSystemService(CAMERA_SERVICE);
+        int sensorOrientation = cameraManager
+                .getCameraCharacteristics(cameraId)
+                .get(CameraCharacteristics.SENSOR_ORIENTATION);
+        rotationCompensation = (rotationCompensation + sensorOrientation + 270) % 360;
+
+        // Return the corresponding FirebaseVisionImageMetadata rotation value.
+        int result;
+        switch (rotationCompensation) {
+            case 0:
+                result = FirebaseVisionImageMetadata.ROTATION_0;
+                break;
+            case 90:
+                result = FirebaseVisionImageMetadata.ROTATION_90;
+                break;
+            case 180:
+                result = FirebaseVisionImageMetadata.ROTATION_180;
+                break;
+            case 270:
+                result = FirebaseVisionImageMetadata.ROTATION_270;
+                break;
+            default:
+                result = FirebaseVisionImageMetadata.ROTATION_0;
+                Log.e(TAG, "Bad rotation value: " + rotationCompensation);
         }
-        FirebaseVisionImageLabeler labeler = FirebaseVision.getInstance().getOnDeviceImageLabeler();
-        labeler.processImage(image)
-                .addOnSuccessListener(new OnSuccessListener<List<FirebaseVisionImageLabel>>() {
-                    @Override
-                    public void onSuccess(List<FirebaseVisionImageLabel> labels) {
-                        CameraActivity.debugstmt = "";
-                        for (FirebaseVisionImageLabel label: labels) {
-                            String text = label.getText();
-                            String entityId = label.getEntityId();
-                            float confidence = label.getConfidence();
-                            CameraActivity.debugstmt += text + " - " +  Math.round(confidence*100) + "%, ";
-                            System.out.println("DEBUG-ML: " + text + " "  + entityId + " " + confidence);
-                        }
-                        newImageToProcess = false;
-                    }
-                })
-                .addOnFailureListener(new OnFailureListener() {
-                    @Override
-                    public void onFailure(@NonNull Exception e) {
-                        // Task failed with an exception
-                        // ...
-                    }
-                });
+        return result;
     }
 
     /**
