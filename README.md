@@ -1,1 +1,1 @@
-# hackutd19-vis-nav-project
+# Echo Canvas
