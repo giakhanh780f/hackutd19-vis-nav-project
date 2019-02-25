@@ -457,7 +457,7 @@ public class Camera2BasicFragment extends Fragment
             /* do what you need to do */
             takePicture();
             /* and here comes the "trick" */
-            handler.postDelayed(this, 7000);
+            handler.postDelayed(this, 10000);
         }
     };
 
@@ -1008,12 +1008,19 @@ public class Camera2BasicFragment extends Fragment
                 .addOnSuccessListener(new OnSuccessListener<List<FirebaseVisionImageLabel>>() {
                     @Override
                     public void onSuccess(List<FirebaseVisionImageLabel> labels) {
-                        CameraActivity.debugstmt = "";
+                        CameraActivity.debugstmt = "In front are ";
                         for (FirebaseVisionImageLabel label: labels) {
                             String text = label.getText();
                             String entityId = label.getEntityId();
                             float confidence = label.getConfidence();
-                            CameraActivity.debugstmt += text + " - " +  Math.round(confidence*100) + "%, ";
+                            int percentage = Math.round(confidence*100);
+                            String confidenceWord = "";
+                            if(percentage >= 80 && percentage < 90)
+                                confidenceWord = "Most likely";
+                            else if(percentage >= 60)
+                                confidenceWord = "Probably";
+                            else continue;
+                            CameraActivity.debugstmt += confidenceWord + " " + text + ", ";
                             System.out.println("DEBUG-ML: " + text + " "  + entityId + " " + confidence);
                         }
                         newImageToProcess = false;
